@@ -1,0 +1,9 @@
+streamlit
+langchain
+langchain-community
+langchain-pinecone
+pinecone-client
+pypdf
+sentence-transformers
+langchain-google-genai
+google-generativeai
