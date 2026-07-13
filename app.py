@@ -503,6 +503,91 @@ _DOMAIN_DESCRIPTIONS = {
 }
 
 
+def safe_llm_call(
+    selected_model: str,
+    api_key: str,
+    messages: list,
+    temperature: float = 0.2,
+    max_output_tokens: int = 900,
+):
+    """
+    Executes a non-streaming Gemini API call with auto-fallback for 503/429 errors.
+    Order: selected_model -> gemini-2.5-flash -> gemini-2.0-flash
+    """
+    models_to_try = [selected_model]
+    for fallback in ["gemini-2.5-flash", "gemini-2.0-flash"]:
+        if fallback not in models_to_try:
+            models_to_try.append(fallback)
+            
+    last_err = None
+    for model in models_to_try:
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model=model,
+                temperature=temperature,
+                google_api_key=api_key,
+                max_output_tokens=max_output_tokens,
+            )
+            return llm.invoke(messages), model
+        except Exception as e:
+            err_str = str(e).lower()
+            if any(term in err_str for term in ["503", "429", "quota", "limit", "unavailable"]):
+                last_err = e
+                continue
+            raise e
+    raise last_err
+
+
+def safe_llm_stream(
+    selected_model: str,
+    api_key: str,
+    messages: list,
+    temperature: float = 0.2,
+):
+    """
+    Generates a stream from Gemini API with auto-fallback for initial 503/429 errors.
+    """
+    models_to_try = [selected_model]
+    for fallback in ["gemini-2.5-flash", "gemini-2.0-flash"]:
+        if fallback not in models_to_try:
+            models_to_try.append(fallback)
+            
+    for model in models_to_try:
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model=model,
+                temperature=temperature,
+                google_api_key=api_key
+            )
+            stream = llm.stream(messages)
+            iterator = iter(stream)
+            try:
+                first_chunk = next(iterator)
+            except StopIteration:
+                # empty stream
+                return iter([]), model
+            
+            # Reassemble generator to yield peeked item first
+            def stream_generator():
+                yield first_chunk
+                for chunk in iterator:
+                    yield chunk
+            return stream_generator(), model
+        except Exception as e:
+            err_str = str(e).lower()
+            if any(term in err_str for term in ["503", "429", "quota", "limit", "unavailable"]):
+                continue
+            raise e
+            
+    # Final fallback if all failed (to throw the error properly)
+    llm = ChatGoogleGenerativeAI(
+        model=models_to_try[-1],
+        temperature=temperature,
+        google_api_key=api_key
+    )
+    return llm.stream(messages), models_to_try[-1]
+
+
 @functools.lru_cache(maxsize=128)
 def generate_hyde_passage(
     query: str,
@@ -545,10 +630,19 @@ def generate_hyde_passage(
                 "Write 1-2 sentences that would appear verbatim in this document "
                 "and directly answer the question. Raw text only, no preamble."
             )
-        response = hyde_llm.invoke([
+            
+        messages = [
             SystemMessage(content=hyde_system),
             HumanMessage(content=f"Q: {query}")
-        ])
+        ]
+        
+        response, _model_used = safe_llm_call(
+            selected_model=model_name,
+            api_key=gemini_api_key,
+            messages=messages,
+            temperature=0.0,
+            max_output_tokens=80
+        )
         passage = response.content.strip()
         return passage if passage else query
     except Exception:
@@ -641,15 +735,22 @@ def _fast_summarize(
         "Use bullet points. Include all specific figures, dates, and names you find. "
         "If a section has no data in context, write 'Not covered in retrieved pages'."
     )
+    messages = [
+        SystemMessage(content=system),
+        HumanMessage(content=f"Document excerpts:\n{context}")
+    ]
     try:
-        resp = llm.invoke([
-            SystemMessage(content=system),
-            HumanMessage(content=f"Document excerpts:\n{context}")
-        ])
-        return resp.content.strip()
+        response, _model_used = safe_llm_call(
+            selected_model=model_name,
+            api_key=gemini_api_key,
+            messages=messages,
+            temperature=0.2,
+            max_output_tokens=900
+        )
+        return response.content.strip()
     except Exception as e:
         err = str(e)
-        if "429" in err or "quota" in err.lower():
+        if "429" in err or "quota" in err.lower() or "limit" in err.lower():
             return (
                 "🚫 **Rate limit hit during summarization.**\n\n"
                 "**Condensed document excerpts (raw):**\n\n" + context
@@ -919,7 +1020,12 @@ if app_mode == "🔍 YCE Virtual RAG Search":
                             chunk_overlap=chunk_overlap
                         )
                         chunks = text_splitter.split_documents(documents)
-                        os.unlink(tmp_path)
+                        
+                        # Windows file-lock bug protection
+                        try:
+                            os.unlink(tmp_path)
+                        except Exception:
+                            pass
                         
                         st.info(f"Generated {len(chunks)} chunks from {len(documents)} pages.")
                         
@@ -1188,12 +1294,19 @@ else:  # Gemini Chatbot Mode
                 message_placeholder = st.empty()
                 full_response = ""
                 try:
-                    llm = ChatGoogleGenerativeAI(
-                        model=model_name,
-                        temperature=temperature if not is_rag_active else min(temperature, 0.4),
-                        google_api_key=gemini_api_key
+                    temp_val = temperature if not is_rag_active else min(temperature, 0.4)
+                    stream, model_used = safe_llm_stream(
+                        selected_model=model_name,
+                        api_key=gemini_api_key,
+                        messages=langchain_messages,
+                        temperature=temp_val
                     )
-                    for chunk in llm.stream(langchain_messages):
+                    
+                    # Highlight if we had to fall back to a stable model due to 503/429
+                    if model_used != model_name:
+                        st.info(f"ℹ️ Switched automatically to `{model_used}` to bypass traffic spikes.")
+                        
+                    for chunk in stream:
                         full_response += chunk.content
                         message_placeholder.markdown(full_response + "▮")
                     message_placeholder.markdown(full_response)
