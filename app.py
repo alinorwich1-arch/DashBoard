@@ -569,11 +569,11 @@ def safe_llm_call(
     max_output_tokens: int = 900,
 ):
     """
-    Executes a non-streaming Gemini API call with auto-fallback for 503/429 errors.
-    Order: selected_model -> gemini-2.5-flash -> gemini-2.0-flash -> gemini-1.5-flash
+    Executes a non-streaming Gemini API call with auto-fallback for 503/429/404 errors.
+    Order: selected_model -> gemini-2.0-flash -> gemini-2.0-flash-lite -> gemini-1.5-flash
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    for fallback in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -589,7 +589,7 @@ def safe_llm_call(
             return llm.invoke(messages), model
         except Exception as e:
             err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "quota", "limit", "unavailable"]):
+            if any(term in err_str for term in ["503", "429", "404", "quota", "limit", "unavailable", "not_found", "not found"]):
                 last_err = e
                 continue
             raise e
@@ -603,10 +603,10 @@ def safe_llm_stream(
     temperature: float = 0.2,
 ):
     """
-    Generates a stream from Gemini API with auto-fallback for initial 503/429 errors.
+    Generates a stream from Gemini API with auto-fallback for initial 503/429/404 errors.
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
+    for fallback in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -633,7 +633,7 @@ def safe_llm_stream(
             return stream_generator(), model
         except Exception as e:
             err_str = str(e).lower()
-            if any(term in err_str for term in ["503", "429", "quota", "limit", "unavailable"]):
+            if any(term in err_str for term in ["503", "429", "404", "quota", "limit", "unavailable", "not_found", "not found"]):
                 continue
             raise e
             
@@ -1019,13 +1019,13 @@ else:  # Gemini Chatbot Settings
     st.sidebar.markdown("### 🤖 Model Settings")
     model_option = st.sidebar.selectbox(
         "Select Model",
-        options=["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "Custom Model Name"],
+        options=["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro", "Custom Model Name"],
         index=0,
-        key="model_select_v2"
+        key="model_select_v3"
     )
     
     if model_option == "Custom Model Name":
-        model_name = st.sidebar.text_input("Enter Model String", value="gemini-2.5-flash", key="custom_model_v2")
+        model_name = st.sidebar.text_input("Enter Model String", value="gemini-2.0-flash", key="custom_model_v3")
     else:
         model_name = model_option
         
