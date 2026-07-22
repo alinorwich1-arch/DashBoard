@@ -1002,7 +1002,7 @@ else:  # Gemini Chatbot Settings
     )
     
     top_k_rag = 4
-    speed_mode = False
+    speed_mode = True
     if rag_mode != "None (General Chat)":
         col1, col2 = st.sidebar.columns([3, 2])
         with col1:
@@ -1014,7 +1014,7 @@ else:  # Gemini Chatbot Settings
         with col2:
             speed_mode = st.checkbox(
                 "⚡ Fast Mode",
-                value=False,
+                value=True,
                 help="Skips HyDE (no extra Gemini call). Much faster, slightly less accurate."
             )
         if speed_mode:
@@ -1282,8 +1282,8 @@ else:  # Gemini Chatbot Mode
                                 "This topic may not be well-covered in the document."
                             )
 
-                        # Cap total context at ~6000 chars to avoid token overflows
-                        MAX_CONTEXT_CHARS = 6000
+                        # Cap total context at ~2500 chars to prevent quota rate limit overflows
+                        MAX_CONTEXT_CHARS = 2500
                         chars_used = 0
                         context_blocks = []
                         for doc, score in retrieved_chunks:
@@ -1374,8 +1374,10 @@ else:  # Gemini Chatbot Mode
             else:
                 custom_system_prompt = system_prompt
 
+            # Only pass recent 4 messages (2 query-response pairs) to avoid token quota exhaustion
             langchain_messages = [SystemMessage(content=custom_system_prompt)]
-            for msg in st.session_state.messages:
+            recent_messages = st.session_state.messages[-4:]
+            for msg in recent_messages:
                 if msg["role"] == "user":
                     langchain_messages.append(HumanMessage(content=msg["content"]))
                 elif msg["role"] == "assistant":
