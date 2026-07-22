@@ -512,10 +512,10 @@ def safe_llm_call(
 ):
     """
     Executes a non-streaming Gemini API call with auto-fallback for 503/429 errors.
-    Order: selected_model -> gemini-2.5-flash -> gemini-2.0-flash
+    Order: selected_model -> gemini-2.5-flash -> gemini-2.0-flash -> gemini-1.5-flash
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-1.5-flash", "gemini-2.0-flash"]:
+    for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -548,7 +548,7 @@ def safe_llm_stream(
     Generates a stream from Gemini API with auto-fallback for initial 503/429 errors.
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-1.5-flash", "gemini-2.0-flash"]:
+    for fallback in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -763,7 +763,7 @@ def adaptive_retrieve(
     query: str,
     k: int,
     gemini_api_key: str = "",
-    model_name: str = "gemini-1.5-flash",
+    model_name: str = "gemini-2.5-flash",
     namespace: str = "",
     speed_mode: bool = False,
 ) -> tuple[list, str]:
@@ -936,16 +936,17 @@ else:  # Gemini Chatbot Settings
     st.sidebar.markdown("### 🤖 Model Settings")
     model_option = st.sidebar.selectbox(
         "Select Model",
-        options=["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "Custom Model Name"],
-        index=0
+        options=["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "Custom Model Name"],
+        index=0,
+        key="model_select_v2"
     )
     
     if model_option == "Custom Model Name":
-        model_name = st.sidebar.text_input("Enter Model String", value="gemini-1.5-flash")
+        model_name = st.sidebar.text_input("Enter Model String", value="gemini-2.5-flash", key="custom_model_v2")
     else:
         model_name = model_option
         
-    temperature = st.sidebar.slider("Temperature (Creativity)", min_value=0.0, max_value=2.0, value=0.7, step=0.1)
+    temperature = st.sidebar.slider("Temperature (Creativity)", min_value=0.0, max_value=2.0, value=0.7, step=0.1, key="temp_v2")
     
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🎭 System Personality")
