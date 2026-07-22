@@ -354,20 +354,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Credentials: loaded from Streamlit Secrets (never hardcode in source) ──
-# Locally: set in .streamlit/secrets.toml
-# On Streamlit Cloud: set via the Secrets manager in the dashboard
-DEFAULT_PINECONE_API_KEY = st.secrets.get("PINECONE_API_KEY", "")
-DEFAULT_GEMINI_API_KEY   = st.secrets.get("GEMINI_API_KEY", "")
-INDEX_NAME               = st.secrets.get("PINECONE_INDEX", "yce")
+# ── Credentials: loaded from Streamlit Secrets or Environment Variables ──
+def _get_secret(key: str, default: str = "") -> str:
+    try:
+        if hasattr(st, "secrets") and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return os.environ.get(key, default)
+
+DEFAULT_PINECONE_API_KEY = _get_secret("PINECONE_API_KEY", "")
+DEFAULT_GEMINI_API_KEY   = _get_secret("GEMINI_API_KEY", "")
+INDEX_NAME               = _get_secret("PINECONE_INDEX", "yce")
 
 if not DEFAULT_PINECONE_API_KEY or not DEFAULT_GEMINI_API_KEY:
-    st.error(
-        "🔑 **API keys not configured.**\n\n"
-        "Add `PINECONE_API_KEY`, `GEMINI_API_KEY`, and `PINECONE_INDEX` to your "
+    st.sidebar.warning(
+        "🔑 **API keys not found in Streamlit Secrets.**\n\n"
+        "Please enter your Pinecone and Gemini API keys below, or configure them in "
         "[Streamlit Secrets](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management)."
     )
-    st.stop()
 
 # Initialize Session State Variables (so they persist across mode switching)
 if "messages" not in st.session_state:
