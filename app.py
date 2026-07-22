@@ -4,15 +4,38 @@ import sys
 import tempfile
 import functools
 import subprocess
+import shutil
+import site
+import importlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Auto-fix deprecated pinecone-client in cached environment
 try:
     from pinecone import Pinecone, ServerlessSpec
 except Exception as e:
-    if "pinecone-client" in str(e).lower():
-        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "pinecone-client", "pinecone"], check=False)
-        subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pinecone"], check=False)
+    if "pinecone" in str(e).lower():
+        # Remove bad module from sys.modules
+        for mod in list(sys.modules.keys()):
+            if mod == "pinecone" or mod.startswith("pinecone."):
+                sys.modules.pop(mod, None)
+        
+        # Remove old pinecone package folders from site-packages
+        for sdir in site.getsitepackages() + [site.getusersitepackages()]:
+            if os.path.exists(sdir):
+                for item in os.listdir(sdir):
+                    if item.startswith("pinecone"):
+                        item_path = os.path.join(sdir, item)
+                        try:
+                            if os.path.isdir(item_path):
+                                shutil.rmtree(item_path)
+                            else:
+                                os.remove(item_path)
+                        except Exception:
+                            pass
+        
+        # Force fresh install of modern pinecone
+        subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "pinecone>=3.0.0"], check=False)
+        importlib.invalidate_caches()
         from pinecone import Pinecone, ServerlessSpec
     else:
         raise e
