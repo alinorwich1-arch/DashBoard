@@ -9,36 +9,54 @@ import site
 import importlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Auto-fix deprecated pinecone-client in cached environment
+# Pre-import cleanup of deprecated pinecone-client stub on Streamlit Cloud
+def _purge_deprecated_pinecone():
+    search_dirs = site.getsitepackages() + [site.getusersitepackages()]
+    search_dirs.extend([
+        "/home/adminuser/venv/lib/python3.14/site-packages",
+        "/home/adminuser/venv/lib/python3.12/site-packages",
+        "/home/adminuser/venv/lib/python3.11/site-packages"
+    ])
+    for sdir in search_dirs:
+        if os.path.exists(sdir):
+            pinecone_dir = os.path.join(sdir, "pinecone")
+            if os.path.exists(pinecone_dir):
+                pinecone_init = os.path.join(pinecone_dir, "__init__.py")
+                needs_purge = False
+                if os.path.exists(pinecone_init):
+                    try:
+                        with open(pinecone_init, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
+                        if "pinecone-client" in content or "renamed from" in content:
+                            needs_purge = True
+                    except Exception:
+                        pass
+                if needs_purge:
+                    shutil.rmtree(pinecone_dir, ignore_errors=True)
+                    for item in os.listdir(sdir):
+                        if item.startswith("pinecone"):
+                            ipath = os.path.join(sdir, item)
+                            if os.path.isdir(ipath):
+                                shutil.rmtree(ipath, ignore_errors=True)
+                            else:
+                                try: os.remove(ipath)
+                                except Exception: pass
+
+_purge_deprecated_pinecone()
+for mod in list(sys.modules.keys()):
+    if mod == "pinecone" or mod.startswith("pinecone."):
+        sys.modules.pop(mod, None)
+
 try:
     from pinecone import Pinecone, ServerlessSpec
-except Exception as e:
-    if "pinecone" in str(e).lower():
-        # Remove bad module from sys.modules
-        for mod in list(sys.modules.keys()):
-            if mod == "pinecone" or mod.startswith("pinecone."):
-                sys.modules.pop(mod, None)
-        
-        # Remove old pinecone package folders from site-packages
-        for sdir in site.getsitepackages() + [site.getusersitepackages()]:
-            if os.path.exists(sdir):
-                for item in os.listdir(sdir):
-                    if item.startswith("pinecone"):
-                        item_path = os.path.join(sdir, item)
-                        try:
-                            if os.path.isdir(item_path):
-                                shutil.rmtree(item_path)
-                            else:
-                                os.remove(item_path)
-                        except Exception:
-                            pass
-        
-        # Force fresh install of modern pinecone
-        subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "pinecone>=3.0.0"], check=False)
-        importlib.invalidate_caches()
-        from pinecone import Pinecone, ServerlessSpec
-    else:
-        raise e
+except Exception:
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "pinecone-client", "pinecone"], check=False)
+    subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "--force-reinstall", "pinecone>=3.0.0"], check=False)
+    for mod in list(sys.modules.keys()):
+        if mod == "pinecone" or mod.startswith("pinecone."):
+            sys.modules.pop(mod, None)
+    importlib.invalidate_caches()
+    from pinecone import Pinecone, ServerlessSpec
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
