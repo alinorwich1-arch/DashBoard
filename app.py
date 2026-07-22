@@ -571,10 +571,10 @@ def safe_llm_call(
 ):
     """
     Executes a non-streaming Gemini API call with auto-fallback for 503/429/404 errors.
-    Order: selected_model -> gemini-1.5-flash -> gemini-2.0-flash -> gemini-2.0-flash-lite
+    Order: selected_model -> gemini-1.5-flash -> gemini-1.5-pro -> gemini-2.0-flash-lite
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]:
+    for fallback in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -609,7 +609,7 @@ def safe_llm_stream(
     If all models hit rate limits, streams a friendly notice instead of throwing an unhandled exception.
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]:
+    for fallback in ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -828,7 +828,7 @@ def adaptive_retrieve(
     query: str,
     k: int,
     gemini_api_key: str = "",
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "gemini-1.5-flash",
     namespace: str = "",
     speed_mode: bool = False,
 ) -> tuple[list, str]:
@@ -1026,13 +1026,13 @@ else:  # Gemini Chatbot Settings
     st.sidebar.markdown("### 🤖 Model Settings")
     model_option = st.sidebar.selectbox(
         "Select Model",
-        options=["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro", "Custom Model Name"],
+        options=["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite", "Custom Model Name"],
         index=0,
-        key="model_select_v3"
+        key="model_select_v4"
     )
     
     if model_option == "Custom Model Name":
-        model_name = st.sidebar.text_input("Enter Model String", value="gemini-2.0-flash", key="custom_model_v3")
+        model_name = st.sidebar.text_input("Enter Model String", value="gemini-1.5-flash", key="custom_model_v4")
     else:
         model_name = model_option
         
