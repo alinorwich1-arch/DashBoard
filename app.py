@@ -1242,7 +1242,7 @@ else:  # Gemini Chatbot Mode
                     vector_store = PineconeVectorStore(
                         index_name=INDEX_NAME,
                         embedding=embeddings,
-                        pinecone_api_key=DEFAULT_PINECONE_API_KEY,
+                        pinecone_api_key=pinecone_api_key,
                         namespace=rag_mode
                     )
                     retrieved_chunks, intent_label = adaptive_retrieve(
