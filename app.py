@@ -911,8 +911,19 @@ if app_mode == "🔍 YCE Virtual RAG Search":
         try:
             indexes = pc_client.list_indexes()
             if hasattr(indexes, "names"):
-                return list(indexes.names())
-            return [idx.name if hasattr(idx, "name") else str(idx) for idx in indexes]
+                attr = getattr(indexes, "names")
+                if callable(attr):
+                    return [str(x) for x in attr()]
+                return [str(x) for x in attr]
+            names = []
+            for idx in indexes:
+                if hasattr(idx, "name"):
+                    names.append(str(idx.name))
+                elif isinstance(idx, dict) and "name" in idx:
+                    names.append(str(idx["name"]))
+                else:
+                    names.append(str(idx))
+            return names
         except Exception:
             return []
 
@@ -922,11 +933,15 @@ if app_mode == "🔍 YCE Virtual RAG Search":
             existing_indexes = get_pinecone_index_names(pc)
             if INDEX_NAME not in existing_indexes:
                 st.sidebar.info(f"Index '{INDEX_NAME}' not found. Initializing serverless index...")
+                try:
+                    spec_val = ServerlessSpec(cloud="aws", region="us-east-1")
+                except Exception:
+                    spec_val = {"serverless": {"cloud": "aws", "region": "us-east-1"}}
                 pc.create_index(
                     name=INDEX_NAME,
                     dimension=384,
                     metric="cosine",
-                    spec=ServerlessSpec(cloud="aws", region="us-east-1")
+                    spec=spec_val
                 )
                 st.sidebar.success(f"Index '{INDEX_NAME}' created successfully!")
                 st.cache_resource.clear()
