@@ -906,10 +906,20 @@ if app_mode == "🔍 YCE Virtual RAG Search":
     os.environ["PINECONE_API_KEY"] = pinecone_api_key
     pc = get_pinecone_client(pinecone_api_key)
     
+    # Helper to get index names safely across Pinecone SDK versions
+    def get_pinecone_index_names(pc_client):
+        try:
+            indexes = pc_client.list_indexes()
+            if hasattr(indexes, "names"):
+                return list(indexes.names())
+            return [idx.name if hasattr(idx, "name") else str(idx) for idx in indexes]
+        except Exception:
+            return []
+
     # Ensure 'yce' index exists
     if pc:
         try:
-            existing_indexes = [idx.name for idx in pc.list_indexes()]
+            existing_indexes = get_pinecone_index_names(pc)
             if INDEX_NAME not in existing_indexes:
                 st.sidebar.info(f"Index '{INDEX_NAME}' not found. Initializing serverless index...")
                 pc.create_index(
