@@ -571,10 +571,10 @@ def safe_llm_call(
 ):
     """
     Executes a non-streaming Gemini API call with auto-fallback for 503/429/404 errors.
-    Order: selected_model -> gemini-2.0-flash -> gemini-2.0-flash-lite -> gemini-1.5-flash
+    Order: selected_model -> gemini-1.5-flash -> gemini-2.0-flash -> gemini-2.0-flash-lite
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]:
+    for fallback in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -592,7 +592,7 @@ def safe_llm_call(
             err_str = str(e).lower()
             if any(term in err_str for term in ["503", "429", "404", "quota", "limit", "unavailable", "not_found", "not found"]):
                 last_err = e
-                time.sleep(1.5)  # Backoff delay to allow API quota window to reset
+                time.sleep(1.0)  # Backoff delay
                 continue
             raise e
     raise last_err
@@ -606,9 +606,10 @@ def safe_llm_stream(
 ):
     """
     Generates a stream from Gemini API with auto-fallback for initial 503/429/404 errors.
+    If all models hit rate limits, streams a friendly notice instead of throwing an unhandled exception.
     """
     models_to_try = [selected_model]
-    for fallback in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"]:
+    for fallback in ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
             
@@ -624,10 +625,8 @@ def safe_llm_stream(
             try:
                 first_chunk = next(iterator)
             except StopIteration:
-                # empty stream
                 return iter([]), model
             
-            # Reassemble generator to yield peeked item first
             def stream_generator():
                 yield first_chunk
                 for chunk in iterator:
@@ -636,17 +635,15 @@ def safe_llm_stream(
         except Exception as e:
             err_str = str(e).lower()
             if any(term in err_str for term in ["503", "429", "404", "quota", "limit", "unavailable", "not_found", "not found"]):
-                time.sleep(1.5)  # Backoff delay to allow API quota window to reset
+                time.sleep(1.0)
                 continue
             raise e
             
-    # Final fallback if all failed (to throw the error properly)
-    llm = ChatGoogleGenerativeAI(
-        model=models_to_try[-1],
-        temperature=temperature,
-        google_api_key=api_key
-    )
-    return llm.stream(messages), models_to_try[-1]
+    # Graceful fallback generator if all models hit rate limit
+    def fallback_generator():
+        yield AIMessage(content="⏳ **Gemini API rate limit reached.** The free tier allows ~15 requests per minute. Please wait ~30 seconds and ask again, or turn on **⚡ Fast Mode** in the sidebar.")
+        
+    return fallback_generator(), "gemini-1.5-flash"
 
 
 @functools.lru_cache(maxsize=128)
