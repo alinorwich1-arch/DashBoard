@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import sys
+import time
 import tempfile
 import functools
 import subprocess
@@ -591,6 +592,7 @@ def safe_llm_call(
             err_str = str(e).lower()
             if any(term in err_str for term in ["503", "429", "404", "quota", "limit", "unavailable", "not_found", "not found"]):
                 last_err = e
+                time.sleep(1.5)  # Backoff delay to allow API quota window to reset
                 continue
             raise e
     raise last_err
@@ -634,6 +636,7 @@ def safe_llm_stream(
         except Exception as e:
             err_str = str(e).lower()
             if any(term in err_str for term in ["503", "429", "404", "quota", "limit", "unavailable", "not_found", "not found"]):
+                time.sleep(1.5)  # Backoff delay to allow API quota window to reset
                 continue
             raise e
             
@@ -852,8 +855,8 @@ def adaptive_retrieve(
 
     queries_to_run = generate_query_variants(query, intent)
 
-    # HyDE: cached; skipped for speed_mode or summarize_full
-    if not speed_mode and gemini_api_key and intent not in ("summarize_full",):
+    # HyDE: cached; skipped for speed_mode, summarize_full, or short queries (<15 chars)
+    if not speed_mode and gemini_api_key and intent not in ("summarize_full",) and len(query.strip()) >= 15:
         hyde_passage = generate_hyde_passage(
             query, gemini_api_key, model_name, intent, namespace
         )
