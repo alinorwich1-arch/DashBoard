@@ -1,9 +1,21 @@
 import streamlit as st
 import os
+import sys
 import tempfile
 import functools
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pinecone import Pinecone, ServerlessSpec
+
+# Auto-fix deprecated pinecone-client in cached environment
+try:
+    from pinecone import Pinecone, ServerlessSpec
+except Exception as e:
+    if "pinecone-client" in str(e).lower():
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", "pinecone-client", "pinecone"], check=False)
+        subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pinecone"], check=False)
+        from pinecone import Pinecone, ServerlessSpec
+    else:
+        raise e
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
