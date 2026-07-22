@@ -639,11 +639,18 @@ def safe_llm_stream(
                 continue
             raise e
             
-    # Graceful fallback generator if all models hit rate limit
+    # Graceful fallback generator if all models hit quota rate limit / resource exhaustion
     def fallback_generator():
-        yield AIMessage(content="⏳ **Gemini API rate limit reached.** The free tier allows ~15 requests per minute. Please wait ~30 seconds and ask again, or turn on **⚡ Fast Mode** in the sidebar.")
+        yield AIMessage(
+            content="⚠️ **Gemini API Key Quota Exhausted.**\n\n"
+                    "Your Gemini API key has reached its request/token quota on Google AI Studio.\n\n"
+                    "**How to fix:**\n"
+                    "1. Get a new free API key from [Google AI Studio](https://aistudio.google.com/app/apikey).\n"
+                    "2. Enter your new key in the **Gemini Settings** sidebar on the left.\n"
+                    "3. Or wait a short while for your free quota window to reset."
+        )
         
-    return fallback_generator(), "gemini-1.5-flash"
+    return fallback_generator(), "gemini-2.0-flash"
 
 
 @functools.lru_cache(maxsize=128)
