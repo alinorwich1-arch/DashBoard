@@ -2,7 +2,7 @@ streamlit
 langchain
 langchain-community
 langchain-pinecone
-pinecone
+pinecone>=3.0.0
 pypdf
 sentence-transformers
 langchain-google-genai
